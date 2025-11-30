@@ -18,7 +18,11 @@ const baseConfig: NextConfig = {
 let configWithPlugins = baseConfig;
 
 // Conditionally enable Sentry configuration
-if (!process.env.NEXT_PUBLIC_SENTRY_DISABLED) {
+// Only enable if SENTRY_DSN is provided and not explicitly disabled
+const isSentryEnabled = process.env.NEXT_PUBLIC_SENTRY_DISABLED !== 'true';
+const hasSentryDSN = !!process.env.NEXT_PUBLIC_SENTRY_DSN;
+
+if (isSentryEnabled && hasSentryDSN) {
   configWithPlugins = withSentryConfig(configWithPlugins, {
     // For all available options, see:
     // https://www.npmjs.com/package/@sentry/webpack-plugin#options

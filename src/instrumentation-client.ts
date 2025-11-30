@@ -3,7 +3,11 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 import * as Sentry from '@sentry/nextjs';
 
-if (!process.env.NEXT_PUBLIC_SENTRY_DISABLED) {
+// Only initialize Sentry if explicitly enabled and DSN is provided
+const isSentryEnabled = process.env.NEXT_PUBLIC_SENTRY_DISABLED !== 'true';
+const hasDSN = !!process.env.NEXT_PUBLIC_SENTRY_DSN;
+
+if (isSentryEnabled && hasDSN) {
   Sentry.init({
     dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
