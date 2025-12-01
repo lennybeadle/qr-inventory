@@ -11,11 +11,6 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger
-} from '@/components/ui/collapsible';
-import {
   Table,
   TableBody,
   TableCell,
@@ -23,25 +18,29 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import { useScanHistory } from '@/hooks/use-scan-history';
-import { ScanEvent } from '@/types/scan';
+import { useScanEvents } from '@/hooks/use-scan-events';
+import type { ScanEventWithCode } from '@/lib/supabaseClient';
 import {
   IconAlertCircle,
   IconArrowLeft,
   IconCamera,
-  IconChevronDown,
-  IconTrash
+  IconLoader2
 } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { QrReader } from 'react-qr-reader';
+import { toast } from 'sonner';
 
 export default function QRScannerPage() {
-  const { scans, addScan, clearHistory } = useScanHistory();
-  const [lastScanned, setLastScanned] = useState<ScanEvent | null>(null);
+  const { scans, isLoading, error, recordScan, refreshScans } =
+    useScanEvents();
+  const [lastScanned, setLastScanned] = useState<ScanEventWithCode | null>(
+    null
+  );
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(true);
+  const [isRecording, setIsRecording] = useState(false);
   const lastScanRef = useRef<string | null>(null);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -53,9 +52,9 @@ export default function QRScannerPage() {
     };
   }, []);
 
-  const handleScan = (result: any, error: any) => {
-    if (error) {
-      console.error('QR Scanner Error:', error);
+  const handleScan = async (result: any, scanError: any) => {
+    if (scanError) {
+      console.error('QR Scanner Error:', scanError);
       setCameraError(
         'Unable to access camera. Please ensure camera permissions are granted.'
       );
@@ -69,19 +68,30 @@ export default function QRScannerPage() {
     if (!resultText) return;
 
     // Prevent duplicate scans within 2 seconds
-    if (lastScanRef.current === resultText) return;
+    if (lastScanRef.current === resultText || isRecording) return;
 
     lastScanRef.current = resultText;
-    addScan(resultText);
 
-    // Update the last scanned display
-    const scannedEvent: ScanEvent = {
-      id: Date.now().toString(),
-      rawValue: resultText,
-      scannedAt: new Date().toISOString(),
-      parsedJson: tryParseJson(resultText)
-    };
-    setLastScanned(scannedEvent);
+    // Record scan to Supabase
+    try {
+      setIsRecording(true);
+      const scanEvent = await recordScan(resultText);
+
+      // Update the last scanned display
+      setLastScanned(scanEvent);
+
+      // Show success toast
+      toast.success('QR code scanned successfully!', {
+        description: `Code ID: ${scanEvent.code?.id || 'Unknown'}`
+      });
+    } catch (err) {
+      console.error('Error recording scan:', err);
+      toast.error('Failed to record scan', {
+        description: err instanceof Error ? err.message : 'Unknown error'
+      });
+    } finally {
+      setIsRecording(false);
+    }
 
     // Reset duplicate check after 2 seconds
     if (scanTimeoutRef.current) {
@@ -90,14 +100,6 @@ export default function QRScannerPage() {
     scanTimeoutRef.current = setTimeout(() => {
       lastScanRef.current = null;
     }, 2000);
-  };
-
-  const tryParseJson = (value: string): unknown => {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return undefined;
-    }
   };
 
   const truncateString = (str: string, maxLength = 50) => {
@@ -113,7 +115,7 @@ export default function QRScannerPage() {
           <div>
             <h1 className='text-3xl font-bold tracking-tight'>QR Scanner</h1>
             <p className='text-muted-foreground'>
-              Scan QR codes using your camera
+              Scan QR codes to track and manage your inventory
             </p>
           </div>
           <Button variant='outline' asChild>
@@ -188,8 +190,17 @@ export default function QRScannerPage() {
                     {/* Scanning indicator */}
                     <div className='absolute bottom-4 left-1/2 -translate-x-1/2'>
                       <Badge className='bg-primary/90 backdrop-blur-sm'>
-                        <IconCamera className='mr-2 h-3 w-3' />
-                        Scanning...
+                        {isRecording ? (
+                          <>
+                            <IconLoader2 className='mr-2 h-3 w-3 animate-spin' />
+                            Recording...
+                          </>
+                        ) : (
+                          <>
+                            <IconCamera className='mr-2 h-3 w-3' />
+                            Scanning...
+                          </>
+                        )}
                       </Badge>
                     </div>
                   </>
@@ -199,42 +210,59 @@ export default function QRScannerPage() {
           </CardContent>
         </Card>
 
-        {/* Last Scanned Data */}
-        {lastScanned && (
+        {/* Last Scanned Code */}
+        {lastScanned && lastScanned.code && (
           <Card>
             <CardHeader>
-              <CardTitle>Last Scanned Data</CardTitle>
+              <CardTitle>Last Scanned Code</CardTitle>
               <CardDescription>
-                Scanned at {format(new Date(lastScanned.scannedAt), 'PPpp')}
+                Scanned at {format(new Date(lastScanned.scanned_at), 'PPpp')}
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
-              <div>
-                <h4 className='mb-2 text-sm font-medium'>Raw Value</h4>
-                <div className='rounded-md bg-muted p-4'>
-                  <code className='break-all font-mono text-sm'>
-                    {lastScanned.rawValue}
-                  </code>
+              <div className='grid grid-cols-2 gap-4 md:grid-cols-4'>
+                <div>
+                  <p className='text-sm font-medium text-muted-foreground'>
+                    Code ID
+                  </p>
+                  <p className='text-lg font-semibold'>
+                    {lastScanned.code.id}
+                  </p>
+                </div>
+                <div>
+                  <p className='text-sm font-medium text-muted-foreground'>
+                    System
+                  </p>
+                  <p className='text-lg font-semibold'>
+                    {lastScanned.code.system_acronym}
+                  </p>
+                </div>
+                <div>
+                  <p className='text-sm font-medium text-muted-foreground'>
+                    Size
+                  </p>
+                  <p className='text-lg font-semibold'>
+                    {lastScanned.code.size}
+                  </p>
+                </div>
+                <div>
+                  <p className='text-sm font-medium text-muted-foreground'>
+                    Year
+                  </p>
+                  <p className='text-lg font-semibold'>
+                    {lastScanned.code.year}
+                  </p>
                 </div>
               </div>
 
-              {lastScanned.parsedJson ? (
-                <div>
-                  <Collapsible>
-                    <CollapsibleTrigger className='flex w-full items-center justify-between rounded-md bg-muted/50 p-3 text-sm font-medium transition-colors hover:bg-muted'>
-                      <span>View Parsed JSON</span>
-                      <IconChevronDown className='h-4 w-4 transition-transform ui-expanded:rotate-180' />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className='mt-2'>
-                      <div className='rounded-md bg-muted p-4'>
-                        <pre className='overflow-x-auto text-xs'>
-                          {JSON.stringify(lastScanned.parsedJson, null, 2)}
-                        </pre>
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
+              <div>
+                <h4 className='mb-2 text-sm font-medium'>Raw Payload</h4>
+                <div className='rounded-md bg-muted p-4'>
+                  <code className='break-all font-mono text-sm'>
+                    {lastScanned.raw_payload}
+                  </code>
                 </div>
-              ) : null}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -246,25 +274,50 @@ export default function QRScannerPage() {
               <div>
                 <CardTitle>Scan History</CardTitle>
                 <CardDescription>
-                  Session history ({scans.length} scan
-                  {scans.length !== 1 ? 's' : ''})
+                  Your recent scans ({scans.length}{' '}
+                  {scans.length === 1 ? 'scan' : 'scans'})
                 </CardDescription>
               </div>
               {scans.length > 0 && (
                 <Button
                   variant='outline'
                   size='sm'
-                  onClick={clearHistory}
-                  className='text-destructive hover:bg-destructive/10'
+                  onClick={refreshScans}
+                  disabled={isLoading}
                 >
-                  <IconTrash className='mr-2 h-4 w-4' />
-                  Clear History
+                  {isLoading ? (
+                    <>
+                      <IconLoader2 className='mr-2 h-4 w-4 animate-spin' />
+                      Refreshing...
+                    </>
+                  ) : (
+                    'Refresh'
+                  )}
                 </Button>
               )}
             </div>
           </CardHeader>
           <CardContent>
-            {scans.length === 0 ? (
+            {error && (
+              <div className='mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4'>
+                <div className='flex items-center gap-2'>
+                  <IconAlertCircle className='h-5 w-5 text-destructive' />
+                  <p className='text-sm font-medium'>Error loading scans</p>
+                </div>
+                <p className='mt-1 text-sm text-muted-foreground'>
+                  {error.message}
+                </p>
+              </div>
+            )}
+
+            {isLoading && scans.length === 0 ? (
+              <div className='flex flex-col items-center justify-center py-12 text-center'>
+                <IconLoader2 className='mb-4 h-12 w-12 animate-spin text-muted-foreground/50' />
+                <p className='text-sm text-muted-foreground'>
+                  Loading scan history...
+                </p>
+              </div>
+            ) : scans.length === 0 ? (
               <div className='flex flex-col items-center justify-center py-12 text-center'>
                 <IconCamera className='mb-4 h-12 w-12 text-muted-foreground/50' />
                 <p className='text-sm text-muted-foreground'>
@@ -277,7 +330,10 @@ export default function QRScannerPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className='w-12'>#</TableHead>
-                      <TableHead>Scanned Data</TableHead>
+                      <TableHead>Code ID</TableHead>
+                      <TableHead>Size</TableHead>
+                      <TableHead>Year</TableHead>
+                      <TableHead>Raw Payload</TableHead>
                       <TableHead className='w-48'>Scanned At</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -285,25 +341,28 @@ export default function QRScannerPage() {
                     {scans.map((scan, index) => (
                       <TableRow key={scan.id}>
                         <TableCell className='font-medium'>
-                          {scans.length - index}
+                          {index + 1}
                         </TableCell>
                         <TableCell>
-                          <div className='max-w-md'>
-                            <code className='break-all text-xs'>
-                              {truncateString(scan.rawValue, 80)}
-                            </code>
-                            {scan.parsedJson ? (
-                              <Badge
-                                variant='outline'
-                                className='ml-2 text-xs'
-                              >
-                                JSON
-                              </Badge>
-                            ) : null}
-                          </div>
+                          <code className='font-mono text-sm font-semibold'>
+                            {scan.code?.id || scan.code_id}
+                          </code>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant='outline'>
+                            {scan.code?.size || 'N/A'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className='text-sm'>
+                          {scan.code?.year || 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          <code className='break-all text-xs text-muted-foreground'>
+                            {truncateString(scan.raw_payload, 40)}
+                          </code>
                         </TableCell>
                         <TableCell className='text-sm text-muted-foreground'>
-                          {format(new Date(scan.scannedAt), 'PP p')}
+                          {format(new Date(scan.scanned_at), 'PP p')}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -314,14 +373,13 @@ export default function QRScannerPage() {
           </CardContent>
         </Card>
 
-        {/* Future Integration Notice */}
+        {/* Integration Notice */}
         <Card className='border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20'>
           <CardContent className='p-4'>
             <p className='text-sm text-muted-foreground'>
-              <strong>Note:</strong> Scan history is currently stored in your
-              session only. Future updates will save scans to your account and
-              enable advanced features like search, filtering, and integration
-              with inventory management.
+              <strong>Database-backed:</strong> All scans are now persisted to
+              Supabase and associated with your account. Your scan history is
+              preserved across sessions and devices.
             </p>
           </CardContent>
         </Card>
