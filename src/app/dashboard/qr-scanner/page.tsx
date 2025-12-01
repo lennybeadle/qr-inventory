@@ -55,10 +55,23 @@ export default function QRScannerPage() {
   const handleScan = async (result: any, scanError: any) => {
     if (scanError) {
       console.error('QR Scanner Error:', scanError);
-      setCameraError(
-        'Unable to access camera. Please ensure camera permissions are granted.'
-      );
-      setIsScanning(false);
+
+      // Only show camera error if it's actually a permission/access issue
+      // Ignore NotFoundException and other transient errors
+      const errorMessage = scanError?.message || scanError?.toString() || '';
+      const isPermissionError =
+        errorMessage.includes('Permission') ||
+        errorMessage.includes('NotAllowedError') ||
+        errorMessage.includes('denied') ||
+        errorMessage.includes('NotFoundError');
+
+      if (isPermissionError) {
+        setCameraError(
+          'Unable to access camera. Please ensure camera permissions are granted.'
+        );
+        setIsScanning(false);
+      }
+      // For other errors, just log them and continue trying
       return;
     }
 
@@ -170,7 +183,8 @@ export default function QRScannerPage() {
                     <QrReader
                       onResult={handleScan}
                       constraints={{
-                        facingMode: 'environment'
+                        facingMode: 'environment',
+                        aspectRatio: 1
                       }}
                       containerStyle={{
                         width: '100%',
@@ -186,6 +200,8 @@ export default function QRScannerPage() {
                         objectFit: 'cover'
                       }}
                       scanDelay={500}
+                      videoId="qr-video"
+                      ViewFinder={() => null}
                     />
 
                     {/* QR Code Scanning Frame Overlay */}
