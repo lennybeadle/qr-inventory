@@ -164,7 +164,7 @@ export default function QRScannerPage() {
                 </Button>
               </div>
             ) : (
-              <div className='relative mx-auto max-w-md overflow-hidden rounded-lg'>
+              <div className='relative mx-auto max-w-md overflow-hidden rounded-lg bg-black'>
                 {isScanning && (
                   <>
                     <QrReader
@@ -187,8 +187,31 @@ export default function QRScannerPage() {
                       }}
                       scanDelay={500}
                     />
+
+                    {/* QR Code Scanning Frame Overlay */}
+                    <div className='pointer-events-none absolute inset-0 flex items-center justify-center'>
+                      {/* Darkened overlay with transparent center */}
+                      <div className='absolute inset-0 bg-black/40' />
+
+                      {/* Scanning frame */}
+                      <div className='relative z-10 h-64 w-64'>
+                        {/* Corner brackets */}
+                        {/* Top-left */}
+                        <div className='absolute left-0 top-0 h-12 w-12 border-l-4 border-t-4 border-primary' />
+                        {/* Top-right */}
+                        <div className='absolute right-0 top-0 h-12 w-12 border-r-4 border-t-4 border-primary' />
+                        {/* Bottom-left */}
+                        <div className='absolute bottom-0 left-0 h-12 w-12 border-b-4 border-l-4 border-primary' />
+                        {/* Bottom-right */}
+                        <div className='absolute bottom-0 right-0 h-12 w-12 border-b-4 border-r-4 border-primary' />
+
+                        {/* Scanning line animation */}
+                        <div className='absolute left-0 right-0 top-0 h-1 animate-scan bg-gradient-to-r from-transparent via-primary to-transparent' />
+                      </div>
+                    </div>
+
                     {/* Scanning indicator */}
-                    <div className='absolute bottom-4 left-1/2 -translate-x-1/2'>
+                    <div className='absolute bottom-4 left-1/2 z-20 -translate-x-1/2'>
                       <Badge className='bg-primary/90 backdrop-blur-sm'>
                         {isRecording ? (
                           <>
