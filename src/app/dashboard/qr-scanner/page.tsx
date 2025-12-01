@@ -11,6 +11,13 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -41,6 +48,7 @@ export default function QRScannerPage() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
+  const [selectedSize, setSelectedSize] = useState<string>('unspecified');
   const lastScanRef = useRef<string | null>(null);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -88,7 +96,7 @@ export default function QRScannerPage() {
     // Record scan to Supabase
     try {
       setIsRecording(true);
-      const scanEvent = await recordScan(resultText);
+      const scanEvent = await recordScan(resultText, { size: selectedSize });
 
       // Update the last scanned display
       setLastScanned(scanEvent);
@@ -138,6 +146,32 @@ export default function QRScannerPage() {
             </Link>
           </Button>
         </div>
+
+        {/* Size Selector */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Select Size</CardTitle>
+            <CardDescription>
+              Choose the size for this scan (only you can set this)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select value={selectedSize} onValueChange={setSelectedSize}>
+              <SelectTrigger className='w-full'>
+                <SelectValue placeholder='Select size' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='unspecified'>Unspecified</SelectItem>
+                <SelectItem value='XS'>Extra Small (XS)</SelectItem>
+                <SelectItem value='S'>Small (S)</SelectItem>
+                <SelectItem value='M'>Medium (M)</SelectItem>
+                <SelectItem value='L'>Large (L)</SelectItem>
+                <SelectItem value='XL'>Extra Large (XL)</SelectItem>
+                <SelectItem value='XXL'>2X Large (XXL)</SelectItem>
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
 
         {/* Camera Preview */}
         <Card>

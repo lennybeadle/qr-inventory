@@ -7,7 +7,10 @@ interface UseScanEventsReturn {
   scans: ScanEventWithCode[];
   isLoading: boolean;
   error: Error | null;
-  recordScan: (rawPayload: string) => Promise<ScanEventWithCode>;
+  recordScan: (
+    rawPayload: string,
+    options?: { size?: string; systemAcronym?: string }
+  ) => Promise<ScanEventWithCode>;
   refreshScans: () => Promise<void>;
 }
 
@@ -64,14 +67,21 @@ export function useScanEvents(): UseScanEventsReturn {
    * Records a new scan event using the new /api/qr/scan endpoint
    */
   const recordScan = useCallback(
-    async (rawPayload: string): Promise<ScanEventWithCode> => {
+    async (
+      rawPayload: string,
+      options?: { size?: string; systemAcronym?: string }
+    ): Promise<ScanEventWithCode> => {
       try {
         const response = await fetch('/api/qr/scan', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ rawPayload })
+          body: JSON.stringify({
+            rawPayload,
+            size: options?.size,
+            systemAcronym: options?.systemAcronym
+          })
         });
 
         if (!response.ok) {
