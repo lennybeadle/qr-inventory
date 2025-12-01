@@ -61,12 +61,12 @@ export function useScanEvents(): UseScanEventsReturn {
   }, []);
 
   /**
-   * Records a new scan event
+   * Records a new scan event using the new /api/qr/scan endpoint
    */
   const recordScan = useCallback(
     async (rawPayload: string): Promise<ScanEventWithCode> => {
       try {
-        const response = await fetch('/api/scan-events', {
+        const response = await fetch('/api/qr/scan', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -81,10 +81,15 @@ export function useScanEvents(): UseScanEventsReturn {
 
         const data = await response.json();
 
+        // Check if the response indicates success
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to record scan');
+        }
+
         // Create a ScanEventWithCode object from the response
         const newScan: ScanEventWithCode = {
           id: data.scanEvent.id,
-          code_id: data.scanEvent.code_id,
+          code_id: data.code.id,
           scanned_at: data.scanEvent.scanned_at,
           raw_payload: rawPayload,
           scanned_by_user_id: '', // Will be set by the server
@@ -102,7 +107,7 @@ export function useScanEvents(): UseScanEventsReturn {
         setScans((prev) => [newScan, ...prev]);
 
         // Refresh to get the canonical list from the server
-        // (This ensures consistency, especially with RLS policies)
+        // (This ensures consistency with database state)
         await refreshScans();
 
         return newScan;
