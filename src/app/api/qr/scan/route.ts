@@ -16,10 +16,11 @@ type ScanRequest = {
  * 1. Plain code: A6F3HW7L
  * 2. URL path: https://app.example.com/s/B7G4JX9M
  * 3. URL query param: https://app.example.com?code=C8H5KY0N
+ * 4. Any other format: Generate a hash-based code ID
  *
- * Returns null if no valid code ID can be extracted.
+ * Never returns null - always generates a valid code ID.
  */
-function extractCodeId(raw: string): string | null {
+function extractCodeId(raw: string): string {
   const trimmed = raw.trim();
 
   // Try to parse as URL first
@@ -44,12 +45,14 @@ function extractCodeId(raw: string): string | null {
     // Not a valid URL, continue to plain text check
   }
 
-  // 3) Fallback: treat as plain code ID if it looks valid
+  // 3) Try as plain code ID
   if (isValidCodeId(trimmed)) {
     return trimmed.toUpperCase();
   }
 
-  return null;
+  // 4) Fallback: Generate a hash-based code ID from the payload
+  // This ensures ANY QR code can be tracked
+  return generateCodeIdFromPayload(trimmed);
 }
 
 /**
@@ -60,6 +63,28 @@ function extractCodeId(raw: string): string | null {
 function isValidCodeId(str: string): boolean {
   const normalized = str.toUpperCase();
   return /^[A-Z0-9]{6,12}$/.test(normalized);
+}
+
+/**
+ * Generate a deterministic code ID from any payload string.
+ * Uses a simple hash function to create a consistent 8-character code.
+ */
+function generateCodeIdFromPayload(payload: string): string {
+  // Simple hash function
+  let hash = 0;
+  for (let i = 0; i < payload.length; i++) {
+    const char = payload.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+
+  // Convert to positive number and then to base36 (0-9, A-Z)
+  const hashStr = Math.abs(hash).toString(36).toUpperCase();
+
+  // Pad or truncate to 8 characters
+  const codeId = (hashStr + '00000000').substring(0, 8);
+
+  return codeId;
 }
 
 /**
@@ -102,18 +127,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Extract code ID from payload
+    // 4. Extract code ID from payload (always succeeds - generates hash if needed)
     const codeId = extractCodeId(body.rawPayload);
-    if (!codeId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            'Could not extract valid code ID from payload. Expected formats: plain code (A6F3HW7L), URL path (/s/CODE), or URL query param (?code=CODE)'
-        },
-        { status: 400 }
-      );
-    }
 
     // 5. Prepare code attributes
     const systemAcronym = body.systemAcronym || 'TMGS';
