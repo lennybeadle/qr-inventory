@@ -12,10 +12,10 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { codeId: string } }
+  { params }: { params: Promise<{ codeId: string }> }
 ) {
   try {
-    const { codeId } = params;
+    const { codeId } = await params;
 
     // Validate code ID format
     if (!codeId || typeof codeId !== 'string') {

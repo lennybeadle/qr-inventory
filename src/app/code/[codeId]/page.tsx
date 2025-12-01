@@ -23,13 +23,19 @@ interface CodeInfo {
 
 export default function PublicCodePage() {
   const params = useParams();
-  const codeId = params.codeId as string;
+  const codeId = (params?.codeId as string) || '';
   const [codeInfo, setCodeInfo] = useState<CodeInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchCodeInfo() {
+      if (!codeId) {
+        setError('Invalid code ID');
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         setError(null);
