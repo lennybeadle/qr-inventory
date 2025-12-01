@@ -144,17 +144,10 @@ export default function PublicCodePage() {
               <div className='rounded-lg bg-muted/50 p-3 text-center'>
                 <p className='text-xs text-muted-foreground'>
                   This is a public view with basic information only.
+                  <br />
+                  Scan another QR code to view different code information.
                 </p>
               </div>
-
-              {/* Scan Another Button */}
-              <Button
-                variant='outline'
-                className='w-full'
-                onClick={() => window.location.reload()}
-              >
-                Scan Another Code
-              </Button>
             </CardContent>
           </Card>
         ) : null}
